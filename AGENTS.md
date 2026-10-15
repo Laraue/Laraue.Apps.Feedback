@@ -25,15 +25,23 @@ directly, the app they're in does, over gRPC.
 
 ## Domain model
 
-Planned for stage 1 - update this section as the entities land.
-
-- `Feedback` - one piece of feedback: the global Laraue user id (`Guid`, from Identity), the
-  service it came from, its type (`Bug` / `Idea` / `Question`), the message, the context, its status
-  (`New` / `Seen` / `Done`) and when it was created. Stage 1 only ever writes `New` - status changes
-  are a later stage.
-- Context - free-form key/value pairs the calling app attaches (page URL, organization, app version,
-  locale, browser). This service doesn't interpret them, except that the notification shows the
-  page.
+- `FeedbackItem` (table `feedback_items`) - one piece of feedback: the global Laraue user id
+  (`Guid`, from Identity), the service it came from, its type (`Bug` / `Idea` / `Question`), the
+  message, the context, its status (`New` / `Seen` / `Done`) and when it was created. Stage 1 only
+  ever writes `New` - status changes are a later stage. Named `FeedbackItem`, not `Feedback`: a type
+  called `Feedback` is shadowed by the `Laraue.Apps.Feedback` namespace in every project here, so
+  each use would need qualifying. The message is at most `FeedbackItem.MessageMaxLength` (3000): the
+  notification carries the whole message plus a few header lines, and a Telegram message is at most
+  4096 characters. Indexed for `ListFeedback` (newest first, optionally by service and status).
+- `FeedbackItem.Context` - free-form key/value pairs the calling app attaches (page URL,
+  organization, app version, locale, browser), a `Dictionary<string, string>` stored as `jsonb`.
+  This service doesn't interpret them, except that the notification shows the page. The JSON
+  conversion is a value converter in `DatabaseContext`, not Npgsql's dynamic JSON - that needs an
+  `EnableDynamicJson()` opt-in on every host's data source and fails at the first insert without it.
+- `Service` - a consuming app (`LaraueBoards`), seeded via `HasData` from `Data/ServicesData.cs`,
+  same as Identity. An independent registry from Identity's/Billing's own `ServiceId` enums - adding
+  a caller means a new enum value, a `ServicesData` entry, a migration and a matching value in the
+  proto's `ServiceId`.
 - The calling service is identified by the `x-laraue-service-id` gRPC header, same as Identity
   (see Identity's `GrpcHeaders`/`ServiceIdInterceptor`), not by a request field - so a caller can't
   submit feedback on behalf of another service by mistake.
