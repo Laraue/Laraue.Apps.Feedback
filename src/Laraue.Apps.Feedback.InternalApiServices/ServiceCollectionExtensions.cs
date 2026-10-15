@@ -34,14 +34,14 @@ public static class ServiceCollectionExtensions
             builder.Services.AddSingleton(
                 sp => new Lazy<ITelegramBotClient>(sp.GetRequiredService<ITelegramBotClient>));
 
-            builder.AddValidatedOptions<IdentityOptions>("Identity");
+            builder.AddValidatedOptions<IdentityOptions>(nameof(IdentityOptions));
 
             // AddLaraueGrpcClient's configureClient callback has no IServiceProvider access, so the URL is
             // read off configuration directly, same as Boards' Billing clients. GetUserProfile doesn't need
             // the x-laraue-service-id header, so no ServiceIdInterceptor (Identity has no ServiceId for
             // this service either).
-            var identityUrl = builder.Configuration["Identity:GrpcUrl"]
-                ?? throw new InvalidOperationException("Identity:GrpcUrl is not configured.");
+            var identityUrl = builder.Configuration["IdentityOptions:GrpcUrl"]
+                ?? throw new InvalidOperationException("IdentityOptions:GrpcUrl is not configured.");
 
             builder.Services.AddLaraueGrpcClient<UserIdentityService.UserIdentityServiceClient>(
                 o => o.Address = new Uri(identityUrl));
