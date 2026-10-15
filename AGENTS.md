@@ -23,7 +23,9 @@ directly, the app they're in does, over gRPC.
   is for reading everyone's feedback, not tied to the caller.
 - A Telegram notification to the team chat (`Telegram:ChatId`) on every submitted feedback
   (`FeedbackNotifier`): type, feedback id, service, sender, page (the `page` context entry, when
-  set), message. The sender is resolved through `Laraue.Apps.Identity`'s `GetUserProfile` - display
+  set), contact (the `contact` context entry, when set - the user's preferred way to be reached,
+  e.g. an email or a Telegram username; cut to `FeedbackNotifier.ContactShownMaxLength` so a
+  full-length page and contact still leave room for the message), message. The sender is resolved through `Laraue.Apps.Identity`'s `GetUserProfile` - display
   name, `@username` (when it isn't the display name already) and the Google email (BRD-223), always
   followed by the global user id. If Identity fails or takes longer than
   `FeedbackNotifier.IdentityTimeout` (3 s), the notification goes out with the user id only.
@@ -53,7 +55,7 @@ directly, the app they're in does, over gRPC.
   no `created_at` index.
 - `FeedbackItem.Context` - free-form key/value pairs the calling app attaches (page URL,
   organization, app version, locale, browser), a `Dictionary<string, string>` stored as `jsonb`.
-  This service doesn't interpret them, except that the notification shows the page. Serialized by
+  This service doesn't interpret them, except that the notification shows the page and the contact. Serialized by
   Npgsql's dynamic JSON, which needs `ConfigureDataSource(x => x.EnableDynamicJson())` in the host's
   `UseNpgsql` (see `InternalApiHost/Program.cs`) - a new host without it fails at the first insert
   with "requires dynamic JSON serialization".

@@ -48,7 +48,9 @@ message SubmitFeedbackRequest {
   FeedbackType type = 2;
   string message = 3;
   // Free-form details from the calling app: page URL, organization, app version, locale, browser.
-  // Stored as given; the Telegram notification shows the "page" entry.
+  // Stored as given; the Telegram notification shows the "page" entry and the "contact" entry (the
+  // user's preferred way to be reached, e.g. an email or a Telegram username - left out when
+  // answering through their sign-in account is fine).
   map<string, string> context = 4;
 }
 

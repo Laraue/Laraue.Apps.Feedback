@@ -54,6 +54,36 @@ public class FeedbackNotificationTests(InternalApiTestHost host) : IClassFixture
     }
 
     [Fact]
+    public async Task SubmitFeedback_ShouldShowContact_WhenContextHasContact()
+    {
+        using var testScope = host.CreateTestScope();
+        var request = ValidRequest();
+        request.Context.Add("page", "https://boards.laraue.com/organizations/test/issues");
+        request.Context.Add("contact", "@ilya_tg");
+
+        await host.CreateFeedbackClient(ServiceId.LaraueBoards).SubmitFeedbackAsync(request);
+
+        Assert.Contains(
+            """
+            Page: https://boards.laraue.com/organizations/test/issues
+            Contact: @ilya_tg
+
+            Add dark mode
+            """,
+            Assert.Single(SentMessages()).Text);
+    }
+
+    [Fact]
+    public async Task SubmitFeedback_ShouldNotShowContact_WhenContextHasNoContact()
+    {
+        using var testScope = host.CreateTestScope();
+
+        await host.CreateFeedbackClient(ServiceId.LaraueBoards).SubmitFeedbackAsync(ValidRequest());
+
+        Assert.DoesNotContain("Contact:", Assert.Single(SentMessages()).Text);
+    }
+
+    [Fact]
     public async Task SubmitFeedback_ShouldSendToTeamChat_WhenFeedbackIsSubmitted()
     {
         using var testScope = host.CreateTestScope();
@@ -138,6 +168,30 @@ public class FeedbackNotificationTests(InternalApiTestHost host) : IClassFixture
 
         var text = FeedbackNotifier.BuildText(item, sender: null);
 
+        Assert.Equal(4096, text.Length);
+        Assert.EndsWith("a…", text);
+    }
+
+    [Fact]
+    public void BuildText_ShouldCutContact_WhenContactAndPageAreAtMaxLength()
+    {
+        var item = new Domain.FeedbackItem
+        {
+            Id = 1,
+            UserId = Guid.NewGuid(),
+            ServiceId = Domain.ServiceId.LaraueBoards,
+            Type = Domain.FeedbackType.Bug,
+            Message = new string('a', Domain.FeedbackItem.MessageMaxLength),
+            Context = new Dictionary<string, string>
+            {
+                [FeedbackNotifier.PageContextKey] = new('p', Domain.FeedbackItem.ContextValueMaxLength),
+                [FeedbackNotifier.ContactContextKey] = new('c', Domain.FeedbackItem.ContextValueMaxLength),
+            },
+        };
+
+        var text = FeedbackNotifier.BuildText(item, sender: null);
+
+        Assert.Contains($"Contact: {new string('c', FeedbackNotifier.ContactShownMaxLength - 1)}…\n", text);
         Assert.Equal(4096, text.Length);
         Assert.EndsWith("a…", text);
     }

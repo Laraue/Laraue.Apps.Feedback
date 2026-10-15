@@ -34,6 +34,19 @@ public sealed class FeedbackNotifier(
     public const string PageContextKey = "page";
 
     /// <summary>
+    /// The context entry the calling app puts the user's preferred way to be reached into (an email, a
+    /// Telegram username), left out when answering through their sign-in account is fine.
+    /// </summary>
+    public const string ContactContextKey = "contact";
+
+    /// <summary>
+    /// How much of the contact the notification shows. A context value may be up to
+    /// <see cref="FeedbackItem.ContextValueMaxLength"/>, and a full-length page and contact together would
+    /// leave no room for the message within Telegram's limit.
+    /// </summary>
+    public const int ContactShownMaxLength = 256;
+
+    /// <summary>
     /// How long the sender lookup may take before the notification goes out with the user id only.
     /// </summary>
     public static readonly TimeSpan IdentityTimeout = TimeSpan.FromSeconds(3);
@@ -108,15 +121,21 @@ public sealed class FeedbackNotifier(
             header.AppendLine($"Page: {page}");
         }
 
+        if (item.Context.TryGetValue(ContactContextKey, out var contact))
+        {
+            header.AppendLine($"Contact: {Cut(contact, ContactShownMaxLength)}");
+        }
+
         header.AppendLine();
 
-        var room = TelegramMessageMaxLength - header.Length;
-        var message = item.Message.Length <= room
-            ? item.Message
-            : item.Message[..(room - 1)] + "…";
+        var message = Cut(item.Message, TelegramMessageMaxLength - header.Length);
 
         return header.Append(message).ToString();
     }
+
+    private static string Cut(string text, int maxLength) => text.Length <= maxLength
+        ? text
+        : text[..(maxLength - 1)] + "…";
 
     private static string TypeTitle(FeedbackType type) => type switch
     {
