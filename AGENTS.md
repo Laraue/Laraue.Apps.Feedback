@@ -107,7 +107,7 @@ referencing `Services` directly, only through its own `Host{Services}` project.
 
 ## External services
 
-- **Identity** (`Laraue.Apps.Identity.Internal.Contracts` NuGet package, `Identity:GrpcUrl`) - only
+- **Identity** (`Laraue.Apps.Identity.Internal.Contracts` NuGet package, `IdentityOptions:GrpcUrl`) - only
   `GetUserProfile`, to name the sender in the notification. Registered with `AddLaraueGrpcClient`
   (tracing, exception translation). `GetUserProfile` doesn't need the `x-laraue-service-id` header,
   so there's no `ServiceIdInterceptor` - Identity has no `ServiceId` for this service anyway. Treat
@@ -127,7 +127,8 @@ environment.
 
 Settings `InternalApiHost` needs:
 - `ConnectionStrings:Postgre`.
-- `Identity:GrpcUrl` - committed as `http://localhost:5363` (Identity's local port) for local runs;
+- `IdentityOptions:GrpcUrl` - the same section name as Boards', so the server reuses Infra's shared
+  `common/env/identity-client.env`. Committed as `http://localhost:5363` (Identity's local port) for local runs;
   the host fails at startup without it, in every environment, since the gRPC client is registered
   from it directly.
 - `Telegram:Token`, `Telegram:ChatId` - not committed. Production validates them at startup; a local
@@ -186,9 +187,12 @@ Same shape as Identity's `.github/workflows/dotnet.yml`: the `deploy` job (push 
 packs `InternalApiHost`'s publish output, uploads it to `/home/laraue/feedback-internal-api-host` on
 the deploy server and rebuilds/restarts its `docker compose` service there. The compose service
 block, the database and the GitHub environment/secrets (`SSH_*`, `TELEGRAM_BOT_TOKEN`,
-`TELEGRAM_CHAT_ID`) are set up once by a human - they aren't in this repo. The app's own settings
-(`ConnectionStrings__Postgre`, `Identity__GrpcUrl`, `Telegram__Token`, `Telegram__ChatId`) go into
-that compose service's environment; the `TELEGRAM_*` GitHub secrets are only for CI's deploy
+`TELEGRAM_CHAT_ID`) are set up once by a human - they aren't in this repo. The service is
+`feedback-internal-api-host` in `Laraue.Apps.Infra` (`services/feedback-internal-api-host/`): gRPC on 5017
+and `/_health`/`/_metrics` on 5018 inside the docker network, database `laraue_feedback` (created by the
+migrations on first start), `IdentityOptions__GrpcUrl` from the shared `common/env/identity-client.env`,
+and `Telegram__Token`/`Telegram__ChatId` from the server's `.env` (`TELEGRAM_FEEDBACK_BOT_TOKEN`,
+`TELEGRAM_FEEDBACK_CHAT_ID`). The `TELEGRAM_*` GitHub secrets of this repo are only for CI's deploy
 notifications, not the app's bot.
 
 ## Testing
