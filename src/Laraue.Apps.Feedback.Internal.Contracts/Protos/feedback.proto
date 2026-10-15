@@ -13,8 +13,9 @@ package laraue.apps.feedback.internal.v1;
 service FeedbackService {
   // Stores a piece of feedback from the calling service (the "x-laraue-service-id" header, required)
   // and returns its id. The message is required, at most 3000 characters (whitespace around it is
-  // trimmed); the type must be set. Context is at most 20 entries, keys up to 64 and values up to
-  // 2048 characters. A violation is INVALID_ARGUMENT.
+  // trimmed); the type must be set. The contact, when set, is at most 256 characters (trimmed; blank
+  // means not set). Context is at most 20 entries, keys up to 64 and values up to 2048 characters.
+  // A violation is INVALID_ARGUMENT.
   rpc SubmitFeedback (SubmitFeedbackRequest) returns (SubmitFeedbackResponse);
 
   // Lists feedback newest first, page by page, optionally narrowed to one service and/or status.
@@ -48,8 +49,12 @@ message SubmitFeedbackRequest {
   FeedbackType type = 2;
   string message = 3;
   // Free-form details from the calling app: page URL, organization, app version, locale, browser.
-  // Stored as given; the Telegram notification shows the "page" entry.
+  // Stored as given and listed in the Telegram notification as they are - this service doesn't
+  // look for particular keys.
   map<string, string> context = 4;
+  // How the user would like to be reached (an email, a Telegram username), when not through their
+  // sign-in account. Left unset when answering through the account is fine.
+  optional string contact = 5;
 }
 
 message SubmitFeedbackResponse {
@@ -77,4 +82,5 @@ message FeedbackItem {
   map<string, string> context = 6;
   FeedbackStatus status = 7;
   google.protobuf.Timestamp created_at = 8;
+  optional string contact = 9;
 }

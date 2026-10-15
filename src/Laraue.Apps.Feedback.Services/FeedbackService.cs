@@ -13,6 +13,7 @@ public sealed record SubmitFeedbackData(
     Guid UserId,
     FeedbackType Type,
     string Message,
+    string? Contact,
     IReadOnlyDictionary<string, string> Context);
 
 public sealed record FeedbackFilter(ServiceId? ServiceId, FeedbackStatus? Status);
@@ -24,6 +25,7 @@ public sealed record FeedbackListItem
     public required ServiceId ServiceId { get; init; }
     public required FeedbackType Type { get; init; }
     public required string Message { get; init; }
+    public required string? Contact { get; init; }
     public required Dictionary<string, string> Context { get; init; }
     public required FeedbackStatus Status { get; init; }
     public required DateTime CreatedAt { get; init; }
@@ -81,6 +83,13 @@ public sealed class FeedbackService(
         }
 
         EnsureMaxLength(nameof(data.Message), message, FeedbackItem.MessageMaxLength);
+
+        var contact = string.IsNullOrWhiteSpace(data.Contact) ? null : data.Contact.Trim();
+        if (contact is not null)
+        {
+            EnsureMaxLength(nameof(data.Contact), contact, FeedbackItem.ContactMaxLength);
+        }
+
         ValidateContext(data.Context);
 
         var item = new FeedbackItem
@@ -89,6 +98,7 @@ public sealed class FeedbackService(
             ServiceId = serviceId,
             Type = data.Type,
             Message = message,
+            Contact = contact,
             Context = new Dictionary<string, string>(data.Context),
             Status = FeedbackStatus.New,
             CreatedAt = dateTimeProvider.UtcNow,
@@ -136,6 +146,7 @@ public sealed class FeedbackService(
                 ServiceId = x.ServiceId,
                 Type = x.Type,
                 Message = x.Message,
+                Contact = x.Contact,
                 Context = x.Context,
                 Status = x.Status,
                 CreatedAt = x.CreatedAt,

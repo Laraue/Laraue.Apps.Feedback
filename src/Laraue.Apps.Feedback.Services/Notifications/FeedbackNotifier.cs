@@ -29,9 +29,10 @@ public sealed class FeedbackNotifier(
     : IFeedbackNotifier
 {
     /// <summary>
-    /// The context entry the calling app puts the page URL into.
+    /// How much of each context value the notification shows. A value may be up to
+    /// <see cref="FeedbackItem.ContextValueMaxLength"/>, too long to list several next to the message.
     /// </summary>
-    public const string PageContextKey = "page";
+    public const int ContextValueShownMaxLength = 300;
 
     /// <summary>
     /// How long the sender lookup may take before the notification goes out with the user id only.
@@ -95,7 +96,9 @@ public sealed class FeedbackNotifier(
 
     /// <summary>
     /// Plain text, not HTML: the message is the user's own text, and HTML escaping could push a message
-    /// within <see cref="FeedbackItem.MessageMaxLength"/> over Telegram's limit.
+    /// within <see cref="FeedbackItem.MessageMaxLength"/> over Telegram's limit. The message goes in
+    /// whole when it can; the context entries come after it in priority - the ones that don't fit in what
+    /// is left are dropped, with a "…" line in their place.
     /// </summary>
     public static string BuildText(FeedbackItem item, string? sender)
     {
@@ -103,20 +106,48 @@ public sealed class FeedbackNotifier(
             .AppendLine($"{TypeTitle(item.Type)} #{item.Id} · {ServiceTitle(item.ServiceId)}")
             .AppendLine(sender is null ? $"From: {item.UserId}" : $"From: {sender} ({item.UserId})");
 
-        if (item.Context.TryGetValue(PageContextKey, out var page))
+        if (item.Contact is not null)
         {
-            header.AppendLine($"Page: {page}");
+            header.AppendLine($"Contact: {item.Contact}");
         }
 
-        header.AppendLine();
+        // The blank line between the header and the message.
+        var blankLineLength = Environment.NewLine.Length;
+        var message = Cut(item.Message, TelegramMessageMaxLength - header.Length - blankLineLength);
+        var room = TelegramMessageMaxLength - header.Length - blankLineLength - message.Length;
 
-        var room = TelegramMessageMaxLength - header.Length;
-        var message = item.Message.Length <= room
-            ? item.Message
-            : item.Message[..(room - 1)] + "…";
+        var droppedLine = $"…{Environment.NewLine}";
+        var lines = item.Context
+            .Select(x => $"{Capitalize(x.Key)}: {Cut(x.Value, ContextValueShownMaxLength)}{Environment.NewLine}")
+            .ToList();
 
-        return header.Append(message).ToString();
+        for (var i = 0; i < lines.Count; i++)
+        {
+            var isLast = i == lines.Count - 1;
+            var needed = lines[i].Length + (isLast ? 0 : droppedLine.Length);
+            if (needed > room)
+            {
+                if (droppedLine.Length <= room)
+                {
+                    header.Append(droppedLine);
+                }
+
+                break;
+            }
+
+            header.Append(lines[i]);
+            room -= lines[i].Length;
+        }
+
+        return header.AppendLine().Append(message).ToString();
     }
+
+    // Keys are never empty - the submit validation rejects that.
+    private static string Capitalize(string key) => char.ToUpperInvariant(key[0]) + key[1..];
+
+    private static string Cut(string text, int maxLength) => text.Length <= maxLength
+        ? text
+        : text[..(maxLength - 1)] + "…";
 
     private static string TypeTitle(FeedbackType type) => type switch
     {

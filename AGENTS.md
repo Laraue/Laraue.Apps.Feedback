@@ -11,19 +11,22 @@ stores it and notifies the team in a Telegram chat. It is internal on purpose: u
 directly, the app they're in does, over gRPC.
 
 **Stage 1 (BRD-224, in progress)**: internal gRPC only (`Protos/feedback.proto`, `FeedbackService`).
-- `SubmitFeedback(user_id, type, message, context)` -> feedback id, stored as `New`. Requires the
-  `x-laraue-service-id` header, a non-empty user id, a set type, a message that isn't blank after
-  trimming and fits `FeedbackItem.MessageMaxLength`, and a context within `FeedbackItem.Context*`
-  limits (entries, key and value length) - otherwise `INVALID_ARGUMENT`. The message is stored
-  trimmed.
+- `SubmitFeedback(user_id, type, message, context, contact?)` -> feedback id, stored as `New`.
+  Requires the `x-laraue-service-id` header, a non-empty user id, a set type, a message that isn't
+  blank after trimming and fits `FeedbackItem.MessageMaxLength`, a contact (when set) within
+  `FeedbackItem.ContactMaxLength`, and a context within `FeedbackItem.Context*` limits (entries, key
+  and value length) - otherwise `INVALID_ARGUMENT`. The message and the contact are stored trimmed;
+  a blank contact is stored as none.
 - `ListFeedback(service?, status?, page, per_page)` -> a page, newest first, with `has_next_page`
   (`ShortPaginateEFAsync`). `page` is 0-based, `per_page` 1-`FeedbackService.PerPageMax` (100);
   the core service checks this itself, since `Laraue.Core`'s pagination throws a plain
   `ArgumentException` (a gRPC `INTERNAL`) for a bad page. It doesn't read the service header: listing
   is for reading everyone's feedback, not tied to the caller.
 - A Telegram notification to the team chat (`Telegram:ChatId`) on every submitted feedback
-  (`FeedbackNotifier`): type, feedback id, service, sender, page (the `page` context entry, when
-  set), message. The sender is resolved through `Laraue.Apps.Identity`'s `GetUserProfile` - display
+  (`FeedbackNotifier`): type, feedback id, service, sender, contact (when set), every context entry
+  as `Key: value` (the key's first letter upper-cased), message. The notifier doesn't look for
+  particular context keys - anything a caller needs this service to understand is a typed request
+  field (like `contact`), not a context entry. The sender is resolved through `Laraue.Apps.Identity`'s `GetUserProfile` - display
   name, `@username` (when it isn't the display name already) and the Google email (BRD-223), always
   followed by the global user id. If Identity fails or takes longer than
   `FeedbackNotifier.IdentityTimeout` (3 s), the notification goes out with the user id only.
@@ -33,8 +36,11 @@ directly, the app they're in does, over gRPC.
     the notification. A lost notification isn't retried - the feedback is still listed by
     `ListFeedback`.
   - Plain text, not HTML: the message is the user's own text, and HTML escaping could push a
-    message within the length limits over Telegram's 4096 characters. `BuildText` cuts the message
-    (with "…") when the whole text would exceed that.
+    message within the length limits over Telegram's 4096 characters. A full context (20 entries of
+    2048 characters) can't fit next to the message, so the message has priority: `BuildText` shows
+    each context value cut to `FeedbackNotifier.ContextValueShownMaxLength`, drops the entries that
+    don't fit in what the message leaves (a "…" line in their place), and cuts the message itself
+    (with "…") only when the header alone leaves too little room.
 
 **Not built yet - future stages, don't add speculatively**:
 - Screenshots/files attached to feedback (BRD-227, after the files service).
@@ -44,8 +50,9 @@ directly, the app they're in does, over gRPC.
 
 - `FeedbackItem` (table `feedback_items`) - one piece of feedback: the global Laraue user id
   (`Guid`, from Identity), the service it came from, its type (`Bug` / `Idea` / `Question`), the
-  message, the context, its status (`New` / `Seen` / `Done`) and when it was created. Stage 1 only
-  ever writes `New` - status changes are a later stage. Named `FeedbackItem`, not `Feedback`: a type
+  message, the contact (how the user would like to be reached - an email, a Telegram username - when
+  not through their sign-in account; null when the account is fine), the context, its status
+  (`New` / `Seen` / `Done`) and when it was created. Stage 1 only ever writes `New` - status changes are a later stage. Named `FeedbackItem`, not `Feedback`: a type
   called `Feedback` is shadowed by the `Laraue.Apps.Feedback` namespace in every project here, so
   each use would need qualifying. The message is at most `FeedbackItem.MessageMaxLength` (3000): the
   notification carries the whole message plus a few header lines, and a Telegram message is at most
@@ -53,7 +60,7 @@ directly, the app they're in does, over gRPC.
   no `created_at` index.
 - `FeedbackItem.Context` - free-form key/value pairs the calling app attaches (page URL,
   organization, app version, locale, browser), a `Dictionary<string, string>` stored as `jsonb`.
-  This service doesn't interpret them, except that the notification shows the page. Serialized by
+  This service doesn't interpret them - the notification lists them as they are. Serialized by
   Npgsql's dynamic JSON, which needs `ConfigureDataSource(x => x.EnableDynamicJson())` in the host's
   `UseNpgsql` (see `InternalApiHost/Program.cs`) - a new host without it fails at the first insert
   with "requires dynamic JSON serialization".

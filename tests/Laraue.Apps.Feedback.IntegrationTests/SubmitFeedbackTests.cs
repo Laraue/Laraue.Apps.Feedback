@@ -130,6 +130,62 @@ public class SubmitFeedbackTests(InternalApiTestHost host) : IClassFixture<Inter
     }
 
     [Fact]
+    public async Task SubmitFeedback_ShouldStoreTrimmedContact_WhenContactIsSet()
+    {
+        using var testScope = host.CreateTestScope();
+        var client = host.CreateFeedbackClient(ServiceId.LaraueBoards);
+
+        var request = ValidRequest();
+        request.Contact = "  ilya@example.com  ";
+
+        var response = await client.SubmitFeedbackAsync(request);
+
+        var item = await testScope.Database.FeedbackItems.SingleAsync(x => x.Id == response.FeedbackId);
+        Assert.Equal("ilya@example.com", item.Contact);
+    }
+
+    [Fact]
+    public async Task SubmitFeedback_ShouldStoreNoContact_WhenContactIsNotSet()
+    {
+        using var testScope = host.CreateTestScope();
+        var client = host.CreateFeedbackClient(ServiceId.LaraueBoards);
+
+        var response = await client.SubmitFeedbackAsync(ValidRequest());
+
+        var item = await testScope.Database.FeedbackItems.SingleAsync(x => x.Id == response.FeedbackId);
+        Assert.Null(item.Contact);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task SubmitFeedback_ShouldStoreNoContact_WhenContactIsBlank(string contact)
+    {
+        using var testScope = host.CreateTestScope();
+        var client = host.CreateFeedbackClient(ServiceId.LaraueBoards);
+
+        var request = ValidRequest();
+        request.Contact = contact;
+
+        var response = await client.SubmitFeedbackAsync(request);
+
+        var item = await testScope.Database.FeedbackItems.SingleAsync(x => x.Id == response.FeedbackId);
+        Assert.Null(item.Contact);
+    }
+
+    [Fact]
+    public async Task SubmitFeedback_ShouldReturnInvalidArgument_WhenContactIsTooLong()
+    {
+        using var testScope = host.CreateTestScope();
+        var client = host.CreateFeedbackClient(ServiceId.LaraueBoards);
+
+        var request = ValidRequest();
+        request.Contact = new string('a', Domain.FeedbackItem.ContactMaxLength + 1);
+
+        await AssertInvalidArgumentAsync(testScope, client, request);
+    }
+
+    [Fact]
     public async Task SubmitFeedback_ShouldReturnInvalidArgument_WhenServiceIdHeaderIsMissing()
     {
         using var testScope = host.CreateTestScope();

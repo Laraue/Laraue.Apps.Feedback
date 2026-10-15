@@ -54,6 +54,53 @@ public class FeedbackNotificationTests(InternalApiTestHost host) : IClassFixture
     }
 
     [Fact]
+    public async Task SubmitFeedback_ShouldShowContactAfterSender_WhenContactIsSet()
+    {
+        using var testScope = host.CreateTestScope();
+        var userId = Guid.NewGuid();
+        var request = ValidRequest(userId);
+        request.Contact = "@ilya_tg";
+        request.Context.Add("page", "https://boards.laraue.com/organizations/test/issues");
+
+        await host.CreateFeedbackClient(ServiceId.LaraueBoards).SubmitFeedbackAsync(request);
+
+        Assert.Contains(
+            $"""
+            ({userId})
+            Contact: @ilya_tg
+            Page: https://boards.laraue.com/organizations/test/issues
+
+            Add dark mode
+            """,
+            Assert.Single(SentMessages()).Text);
+    }
+
+    [Fact]
+    public async Task SubmitFeedback_ShouldNotShowContact_WhenContactIsNotSet()
+    {
+        using var testScope = host.CreateTestScope();
+
+        await host.CreateFeedbackClient(ServiceId.LaraueBoards).SubmitFeedbackAsync(ValidRequest());
+
+        Assert.DoesNotContain("Contact:", Assert.Single(SentMessages()).Text);
+    }
+
+    [Fact]
+    public async Task SubmitFeedback_ShouldListEveryContextEntry_WhenContextIsSet()
+    {
+        using var testScope = host.CreateTestScope();
+        var request = ValidRequest();
+        request.Context.Add("locale", "en");
+        request.Context.Add("browser", "Firefox 140");
+
+        await host.CreateFeedbackClient(ServiceId.LaraueBoards).SubmitFeedbackAsync(request);
+
+        var text = Assert.Single(SentMessages()).Text;
+        Assert.Contains("\nLocale: en\n", text);
+        Assert.Contains("\nBrowser: Firefox 140\n", text);
+    }
+
+    [Fact]
     public async Task SubmitFeedback_ShouldSendToTeamChat_WhenFeedbackIsSubmitted()
     {
         using var testScope = host.CreateTestScope();
@@ -123,24 +170,52 @@ public class FeedbackNotificationTests(InternalApiTestHost host) : IClassFixture
     [Fact]
     public void BuildText_ShouldCutMessage_WhenTextExceedsTelegramLimit()
     {
-        var item = new Domain.FeedbackItem
-        {
-            Id = 1,
-            UserId = Guid.NewGuid(),
-            ServiceId = Domain.ServiceId.LaraueBoards,
-            Type = Domain.FeedbackType.Bug,
-            Message = new string('a', Domain.FeedbackItem.MessageMaxLength),
-            Context = new Dictionary<string, string>
-            {
-                [FeedbackNotifier.PageContextKey] = new('p', Domain.FeedbackItem.ContextValueMaxLength),
-            },
-        };
+        var item = NewItem(new string('a', Domain.FeedbackItem.MessageMaxLength));
 
-        var text = FeedbackNotifier.BuildText(item, sender: null);
+        var text = FeedbackNotifier.BuildText(item, sender: new string('s', 2000));
 
         Assert.Equal(4096, text.Length);
         Assert.EndsWith("a…", text);
     }
+
+    [Fact]
+    public void BuildText_ShouldCutContextValue_WhenItIsLongerThanShown()
+    {
+        var item = NewItem("Add dark mode");
+        item.Context["page"] = new string('p', Domain.FeedbackItem.ContextValueMaxLength);
+
+        var text = FeedbackNotifier.BuildText(item, sender: null);
+
+        Assert.Contains($"\nPage: {new string('p', FeedbackNotifier.ContextValueShownMaxLength - 1)}…\n", text);
+    }
+
+    [Fact]
+    public void BuildText_ShouldDropContextEntriesKeepingMessage_WhenTheyDontFit()
+    {
+        var message = new string('a', Domain.FeedbackItem.MessageMaxLength);
+        var item = NewItem(message);
+        item.Contact = new string('c', Domain.FeedbackItem.ContactMaxLength);
+        for (var i = 0; i < Domain.FeedbackItem.ContextMaxEntries; i++)
+        {
+            item.Context[$"key{i}"] = new string('v', Domain.FeedbackItem.ContextValueMaxLength);
+        }
+
+        var text = FeedbackNotifier.BuildText(item, sender: null);
+
+        Assert.True(text.Length <= 4096);
+        Assert.Contains("\nKey0: ", text);
+        Assert.DoesNotContain($"\nKey{Domain.FeedbackItem.ContextMaxEntries - 1}: ", text);
+        Assert.EndsWith($"\n…\n\n{message}", text);
+    }
+
+    private static Domain.FeedbackItem NewItem(string message) => new()
+    {
+        Id = 1,
+        UserId = Guid.NewGuid(),
+        ServiceId = Domain.ServiceId.LaraueBoards,
+        Type = Domain.FeedbackType.Bug,
+        Message = message,
+    };
 
     private static SubmitFeedbackRequest ValidRequest(Guid? userId = null) => new()
     {

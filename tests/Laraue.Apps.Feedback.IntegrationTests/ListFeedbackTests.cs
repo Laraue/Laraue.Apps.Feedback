@@ -31,6 +31,7 @@ public class ListFeedbackTests(InternalApiTestHost host) : IClassFixture<Interna
             UserId = userId.ToString(),
             Type = FeedbackType.Question,
             Message = "How do I invite a member?",
+            Contact = "@ilya_tg",
         };
         submitRequest.Context.Add("page", "https://boards.laraue.com/organizations/test/members");
         var submitted = await host.CreateFeedbackClient(ServiceId.LaraueBoards).SubmitFeedbackAsync(submitRequest);
@@ -44,6 +45,7 @@ public class ListFeedbackTests(InternalApiTestHost host) : IClassFixture<Interna
         Assert.Equal(ServiceId.LaraueBoards, item.Service);
         Assert.Equal(FeedbackType.Question, item.Type);
         Assert.Equal(FeedbackStatus.New, item.Status);
+        Assert.Equal("@ilya_tg", item.Contact);
         Assert.Equal("https://boards.laraue.com/organizations/test/members", item.Context["page"]);
         Assert.NotNull(item.CreatedAt);
     }

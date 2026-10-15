@@ -26,6 +26,7 @@ public sealed class FeedbackGrpcService(IFeedbackService feedbackService)
             ParseUserId(request.UserId),
             ToDomainType(request.Type),
             request.Message,
+            request.HasContact ? request.Contact : null,
             request.Context);
 
         var id = await ExecuteAsync(() => feedbackService.SubmitAsync(serviceId, data, context.CancellationToken));
@@ -77,6 +78,11 @@ public sealed class FeedbackGrpcService(IFeedbackService feedbackService)
             Status = ToContractStatus(item.Status),
             CreatedAt = Timestamp.FromDateTime(DateTime.SpecifyKind(item.CreatedAt, DateTimeKind.Utc)),
         };
+
+        if (item.Contact is not null)
+        {
+            contractItem.Contact = item.Contact;
+        }
 
         contractItem.Context.Add(item.Context);
 
