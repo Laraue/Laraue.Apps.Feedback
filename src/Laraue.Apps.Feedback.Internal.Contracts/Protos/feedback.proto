@@ -1,5 +1,7 @@
 syntax = "proto3";
 
+import "google/protobuf/timestamp.proto";
+
 option csharp_namespace = "Laraue.Apps.Feedback.Internal.Contracts";
 package laraue.apps.feedback.internal.v1;
 
@@ -8,10 +10,71 @@ package laraue.apps.feedback.internal.v1;
 // Which service is calling is identified once per client via the "x-laraue-service-id" metadata
 // header (see GrpcHeaders.ServiceIdHeaderName in this package, value = the numeric ServiceId
 // below), not repeated on every request message.
-//
-// The FeedbackService itself (SubmitFeedback, ListFeedback) is added in the next step of BRD-224.
+service FeedbackService {
+  // Stores a piece of feedback from the calling service (the "x-laraue-service-id" header, required)
+  // and returns its id. The message is required, at most 3000 characters (whitespace around it is
+  // trimmed); the type must be set. Context is at most 20 entries, keys up to 64 and values up to
+  // 2048 characters. A violation is INVALID_ARGUMENT.
+  rpc SubmitFeedback (SubmitFeedbackRequest) returns (SubmitFeedbackResponse);
+
+  // Lists feedback newest first, page by page, optionally narrowed to one service and/or status.
+  // Not tied to the calling service - the header isn't required. page is 0-based, per_page 1-100;
+  // anything else is INVALID_ARGUMENT.
+  rpc ListFeedback (ListFeedbackRequest) returns (ListFeedbackResponse);
+}
 
 enum ServiceId {
   SERVICE_ID_UNSPECIFIED = 0;
   SERVICE_ID_LARAUE_BOARDS = 1;
+}
+
+enum FeedbackType {
+  FEEDBACK_TYPE_UNSPECIFIED = 0;
+  FEEDBACK_TYPE_BUG = 1;
+  FEEDBACK_TYPE_IDEA = 2;
+  FEEDBACK_TYPE_QUESTION = 3;
+}
+
+enum FeedbackStatus {
+  FEEDBACK_STATUS_UNSPECIFIED = 0;
+  FEEDBACK_STATUS_NEW = 1;
+  FEEDBACK_STATUS_SEEN = 2;
+  FEEDBACK_STATUS_DONE = 3;
+}
+
+message SubmitFeedbackRequest {
+  // The global Laraue user id (from Identity) of the user who left the feedback.
+  string user_id = 1;
+  FeedbackType type = 2;
+  string message = 3;
+  // Free-form details from the calling app: page URL, organization, app version, locale, browser.
+  // Stored as given; the Telegram notification shows the "page" entry.
+  map<string, string> context = 4;
+}
+
+message SubmitFeedbackResponse {
+  int64 feedback_id = 1;
+}
+
+message ListFeedbackRequest {
+  optional ServiceId service = 1;
+  optional FeedbackStatus status = 2;
+  int32 page = 3;
+  int32 per_page = 4;
+}
+
+message ListFeedbackResponse {
+  repeated FeedbackItem items = 1;
+  bool has_next_page = 2;
+}
+
+message FeedbackItem {
+  int64 id = 1;
+  string user_id = 2;
+  ServiceId service = 3;
+  FeedbackType type = 4;
+  string message = 5;
+  map<string, string> context = 6;
+  FeedbackStatus status = 7;
+  google.protobuf.Timestamp created_at = 8;
 }

@@ -1,3 +1,4 @@
+using Laraue.Apps.Feedback.Services;
 using Laraue.Core.DateTime.Services.Abstractions;
 using Laraue.Core.DateTime.Services.Impl;
 using Microsoft.Extensions.DependencyInjection;
@@ -11,7 +12,8 @@ public static class ServiceCollectionExtensions
         public IServiceCollection AddInternalApiServices()
         {
             services
-                .AddSingleton<IDateTimeProvider, DateTimeProvider>();
+                .AddSingleton<IDateTimeProvider, DateTimeProvider>()
+                .AddScoped<IFeedbackService, FeedbackService>();
 
             return services;
         }

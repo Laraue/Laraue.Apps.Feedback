@@ -1,4 +1,7 @@
+using Grpc.Core.Interceptors;
+using Grpc.Net.Client;
 using Laraue.Apps.Feedback.DataAccess;
+using Laraue.Apps.Feedback.Internal.Contracts;
 using Laraue.Apps.Feedback.InternalApiHost;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -24,6 +27,36 @@ public class InternalApiTestHost : WebApplicationFactory<Program>
             options => options.ScrapeResponseCacheDurationMilliseconds = 0));
 
         return base.CreateHost(builder);
+    }
+
+    /// <summary>
+    /// A gRPC client wired to this in-memory test server (no real network socket), for calling
+    /// <see cref="FeedbackService"/> the same way another Laraue app would - including going through
+    /// <see cref="ServiceIdInterceptor"/> to attach <paramref name="callingService"/> as a header.
+    /// </summary>
+    public FeedbackService.FeedbackServiceClient CreateFeedbackClient(ServiceId callingService)
+    {
+        return new FeedbackService.FeedbackServiceClient(
+            CreateChannel().Intercept(new ServiceIdInterceptor(callingService)));
+    }
+
+    /// <summary>
+    /// A client with no <see cref="ServiceIdInterceptor"/> attached - for the "caller didn't identify
+    /// itself" path and for <c>ListFeedback</c>, which doesn't need the header.
+    /// </summary>
+    public FeedbackService.FeedbackServiceClient CreateFeedbackClientWithoutServiceIdHeader()
+    {
+        return new FeedbackService.FeedbackServiceClient(CreateChannel());
+    }
+
+    private GrpcChannel CreateChannel()
+    {
+        var client = CreateDefaultClient();
+
+        return GrpcChannel.ForAddress(client.BaseAddress!, new GrpcChannelOptions
+        {
+            HttpClient = client,
+        });
     }
 
     public InternalApiTestHostScope CreateTestScope()
