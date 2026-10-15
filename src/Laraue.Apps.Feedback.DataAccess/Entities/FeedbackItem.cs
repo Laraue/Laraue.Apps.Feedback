@@ -14,6 +14,11 @@ public class FeedbackItem
     public const int MessageMaxLength = 3000;
 
     /// <summary>
+    /// Max length of <see cref="Contact"/>: an email address fits in 254.
+    /// </summary>
+    public const int ContactMaxLength = 256;
+
+    /// <summary>
     /// Limits of <see cref="Context"/>: enough for a page URL and a handful of details, while keeping a
     /// caller from storing arbitrary amounts of data in it.
     /// </summary>
@@ -46,8 +51,16 @@ public class FeedbackItem
     public required string Message { get; set; }
 
     /// <summary>
+    /// How the user would like to be reached (an email, a Telegram username), when not through their
+    /// sign-in account. Null when answering through the account is fine.
+    /// </summary>
+    [MaxLength(ContactMaxLength)]
+    public string? Contact { get; set; }
+
+    /// <summary>
     /// Free-form key/value pairs the calling app attaches (page URL, organization, app version, locale,
-    /// browser). Stored as <c>jsonb</c>; this service doesn't interpret them.
+    /// browser). Stored as <c>jsonb</c>; this service doesn't interpret them - the notification lists them as
+    /// they are.
     /// </summary>
     public Dictionary<string, string> Context { get; set; } = new();
 

@@ -32,6 +32,11 @@ namespace Laraue.Apps.Feedback.DataAccess.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
+                    b.Property<string>("Contact")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("contact");
+
                     b.Property<Dictionary<string, string>>("Context")
                         .IsRequired()
                         .HasColumnType("jsonb")
