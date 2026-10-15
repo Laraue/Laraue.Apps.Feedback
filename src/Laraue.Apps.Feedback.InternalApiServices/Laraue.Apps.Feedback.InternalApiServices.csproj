@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\Laraue.Apps.Feedback.Services\Laraue.Apps.Feedback.Services.csproj" />
+      <ProjectReference Include="..\Laraue.Apps.Feedback.Internal.Contracts\Laraue.Apps.Feedback.Internal.Contracts.csproj" />
+    </ItemGroup>
+
+</Project>

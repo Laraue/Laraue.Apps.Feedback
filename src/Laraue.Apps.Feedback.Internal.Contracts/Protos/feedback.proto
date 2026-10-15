@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+option csharp_namespace = "Laraue.Apps.Feedback.Internal.Contracts";
+package laraue.apps.feedback.internal.v1;
+
+// Service-to-service contract other Laraue apps call to send their users' feedback here.
+//
+// Which service is calling is identified once per client via the "x-laraue-service-id" metadata
+// header (see GrpcHeaders.ServiceIdHeaderName in this package, value = the numeric ServiceId
+// below), not repeated on every request message.
+//
+// The FeedbackService itself (SubmitFeedback, ListFeedback) is added in the next step of BRD-224.
+
+enum ServiceId {
+  SERVICE_ID_UNSPECIFIED = 0;
+  SERVICE_ID_LARAUE_BOARDS = 1;
+}

@@ -1,0 +1,64 @@
+using Laraue.Apps.Feedback.DataAccess;
+using Laraue.Apps.Feedback.InternalApiServices;
+using Laraue.Grpc.OpenTelemetry;
+using Laraue.Grpc.Server;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Microsoft.EntityFrameworkCore;
+using OpenTelemetry.Metrics;
+
+namespace Laraue.Apps.Feedback.InternalApiHost;
+
+public sealed class Program
+{
+    public static async Task Main(string[] args)
+    {
+        var builder = WebApplication.CreateBuilder(args);
+        builder.Logging.ClearProviders().AddJsonConsole();
+
+        const string dbConnectionStringName = "Postgre";
+
+        // Two endpoints, not one Http1AndHttp2: Kestrel can't serve HTTP/1.1 and cleartext HTTP/2 on the
+        // same endpoint without TLS - see "Project layout" in AGENTS.md.
+        var grpcPort = builder.Configuration.GetValue<int?>("Kestrel:GrpcPort") ?? 5463;
+        var healthPort = builder.Configuration.GetValue<int?>("Kestrel:HealthPort") ?? 5464;
+
+        builder.WebHost.ConfigureKestrel(options =>
+        {
+            options.ListenAnyIP(grpcPort, listen => listen.Protocols = HttpProtocols.Http2);
+            options.ListenAnyIP(healthPort, listen => listen.Protocols = HttpProtocols.Http1);
+        });
+
+        var connection = builder.Configuration.GetConnectionString(dbConnectionStringName);
+        builder.Services.AddDbContext<DatabaseContext>(opt => opt
+            // Dynamic JSON: FeedbackItem.Context, a Dictionary stored as jsonb.
+            .UseNpgsql(connection, npgsql => npgsql.ConfigureDataSource(x => x.EnableDynamicJson()))
+            .UseSnakeCaseNamingConvention());
+
+        builder.Services.AddInternalApiServices();
+
+        builder.Services
+            .AddGrpc()
+            .AddLaraueGrpcTelemetry();
+
+        builder.Services.AddLaraueGrpcTelemetry(
+            configureMetrics: metrics => metrics
+                .AddAspNetCoreInstrumentation()
+                .AddRuntimeInstrumentation()
+                .AddPrometheusExporter());
+
+        builder.Services.AddHealthChecks();
+
+        var app = builder.Build();
+
+        using (var scope = app.Services.CreateScope())
+        {
+            await using var db = scope.ServiceProvider.GetRequiredService<DatabaseContext>();
+            await db.Database.MigrateAsync();
+        }
+
+        app.MapHealthChecks("/_health");
+        app.MapPrometheusScrapingEndpoint("/_metrics");
+
+        await app.RunAsync();
+    }
+}
