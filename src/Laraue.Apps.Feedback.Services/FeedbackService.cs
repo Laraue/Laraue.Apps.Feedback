@@ -1,5 +1,6 @@
 using Laraue.Apps.Feedback.DataAccess;
 using Laraue.Apps.Feedback.DataAccess.Entities;
+using Laraue.Apps.Feedback.Services.Notifications;
 using Laraue.Apps.Feedback.Services.Resources;
 using Laraue.Core.DataAccess.Contracts;
 using Laraue.Core.DataAccess.EFCore.Extensions;
@@ -31,8 +32,8 @@ public sealed record FeedbackListItem
 public interface IFeedbackService
 {
     /// <summary>
-    /// Stores feedback from <paramref name="serviceId"/> as <see cref="FeedbackStatus.New"/> and returns its
-    /// id. Throws <see cref="BadRequestException"/> for an invalid value.
+    /// Stores feedback from <paramref name="serviceId"/> as <see cref="FeedbackStatus.New"/>, notifies the
+    /// team in Telegram and returns its id. Throws <see cref="BadRequestException"/> for an invalid value.
     /// </summary>
     Task<long> SubmitAsync(ServiceId serviceId, SubmitFeedbackData data, CancellationToken cancellationToken);
 
@@ -45,7 +46,11 @@ public interface IFeedbackService
         CancellationToken cancellationToken);
 }
 
-public sealed class FeedbackService(DatabaseContext context, IDateTimeProvider dateTimeProvider) : IFeedbackService
+public sealed class FeedbackService(
+    DatabaseContext context,
+    IDateTimeProvider dateTimeProvider,
+    IFeedbackNotifier notifier)
+    : IFeedbackService
 {
     public const int PerPageMax = 100;
 
@@ -91,6 +96,10 @@ public sealed class FeedbackService(DatabaseContext context, IDateTimeProvider d
 
         context.FeedbackItems.Add(item);
         await context.SaveChangesAsync(cancellationToken);
+
+        // After the save, and not with the caller's token: the feedback is stored either way, and a caller
+        // giving up on the response shouldn't cancel the team's notification. The notifier never throws.
+        await notifier.NotifyAsync(item, CancellationToken.None);
 
         return item.Id;
     }

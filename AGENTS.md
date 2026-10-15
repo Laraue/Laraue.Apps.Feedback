@@ -21,10 +21,20 @@ directly, the app they're in does, over gRPC.
   the core service checks this itself, since `Laraue.Core`'s pagination throws a plain
   `ArgumentException` (a gRPC `INTERNAL`) for a bad page. It doesn't read the service header: listing
   is for reading everyone's feedback, not tied to the caller.
-- A Telegram notification (**not built yet**, next step) to the team chat on every submitted feedback: type, sender, service,
-  page, message. The sender is resolved through `Laraue.Apps.Identity`'s `GetUserProfile` (display
-  name, `@username` or the Google email - BRD-223). If Identity is unavailable, the notification
-  still goes out, with the global user id instead of a name - a failed lookup never loses feedback.
+- A Telegram notification to the team chat (`Telegram:ChatId`) on every submitted feedback
+  (`FeedbackNotifier`): type, feedback id, service, sender, page (the `page` context entry, when
+  set), message. The sender is resolved through `Laraue.Apps.Identity`'s `GetUserProfile` - display
+  name, `@username` (when it isn't the display name already) and the Google email (BRD-223), always
+  followed by the global user id. If Identity fails or takes longer than
+  `FeedbackNotifier.IdentityTimeout` (3 s), the notification goes out with the user id only.
+  - Sent **after** the feedback is saved, inside the `SubmitFeedback` call, with
+    `CancellationToken.None` - a caller giving up on the response doesn't cancel it. The notifier
+    catches and logs every failure (Identity, Telegram) itself, so a submit never fails because of
+    the notification. A lost notification isn't retried - the feedback is still listed by
+    `ListFeedback`.
+  - Plain text, not HTML: the message is the user's own text, and HTML escaping could push a
+    message within the length limits over Telegram's 4096 characters. `BuildText` cuts the message
+    (with "…") when the whole text would exceed that.
 
 **Not built yet - future stages, don't add speculatively**:
 - Screenshots/files attached to feedback (BRD-227, after the files service).
@@ -89,22 +99,41 @@ referencing `Services` directly, only through its own `Host{Services}` project.
   `InternalApiHost` that hands back the real generated gRPC client over the in-memory `TestServer`,
   so tests call the contract the way another Laraue app would. Same per-test pattern as Identity:
   `using var testScope = host.CreateTestScope();` cleans the database, test classes are
-  `[Collection("IntegrationTest")]`. The Telegram bot client and the Identity client are mocked.
+  `[Collection("IntegrationTest")]`. The test host replaces `ITelegramBotClient` and Identity's
+  `UserIdentityServiceClient` with mocks (`host.BotClientMock`/`host.IdentityClientMock`);
+  `CreateTestScope()` resets them - the bot accepts every message, Identity returns
+  `InternalApiTestHost.DefaultProfile` (`host.SetupProfile(...)` for another). Notification tests
+  read what was sent from `BotClientMock.Invocations`.
 
 ## External services
 
-- **Identity** (`Laraue.Apps.Identity.Internal.Contracts` NuGet package) - only `GetUserProfile`, to
-  name the sender in the notification. Treat it as optional at runtime: a timeout or an RPC error
-  means "send with the user id", never "fail the submit".
-- **Telegram** - the bot token and the team chat id come from config. Sending the notification
-  must not fail the submit either: the feedback is saved first, then the team is notified.
+- **Identity** (`Laraue.Apps.Identity.Internal.Contracts` NuGet package, `Identity:GrpcUrl`) - only
+  `GetUserProfile`, to name the sender in the notification. Registered with `AddLaraueGrpcClient`
+  (tracing, exception translation). `GetUserProfile` doesn't need the `x-laraue-service-id` header,
+  so there's no `ServiceIdInterceptor` - Identity has no `ServiceId` for this service anyway. Treat
+  Identity as optional at runtime: a timeout or an RPC error means "send with the user id", never
+  "fail the submit".
+- **Telegram** (`Telegram.Bot`, `Telegram:Token`/`Telegram:ChatId`) - the bot that posts to the team
+  chat. The bot must be a member of that chat.
 
 ## Options and configuration
 
 Follow `Laraue.Apps.Boards`'s convention: bind every options class through a validated-options
 helper (validation and `ValidateOnStart()` in Production only), mark required values `[Required]`,
-and register an options class only in the hosts that use it. Secrets (bot token) never go into a
-committed `appsettings.json` - production values come from the deploy server's environment.
+and register an options class only in the hosts that use it - `AddValidatedOptions` in
+`InternalApiServices/ServiceCollectionExtensions.cs`, a copy of Boards' helper. Secrets (bot token)
+never go into a committed `appsettings.json` - production values come from the deploy server's
+environment.
+
+Settings `InternalApiHost` needs:
+- `ConnectionStrings:Postgre`.
+- `Identity:GrpcUrl` - committed as `http://localhost:5363` (Identity's local port) for local runs;
+  the host fails at startup without it, in every environment, since the gRPC client is registered
+  from it directly.
+- `Telegram:Token`, `Telegram:ChatId` - not committed. Production validates them at startup; a local
+  run without them still works - `FeedbackNotifier` takes the bot client as a `Lazy<>`, so the
+  missing token is only a logged "Telegram:Token is not configured" on each submit. Put them in
+  `appsettings.Development.json` (git-ignored) to get notifications locally.
 
 ## No unpaginated lists
 
@@ -157,7 +186,10 @@ Same shape as Identity's `.github/workflows/dotnet.yml`: the `deploy` job (push 
 packs `InternalApiHost`'s publish output, uploads it to `/home/laraue/feedback-internal-api-host` on
 the deploy server and rebuilds/restarts its `docker compose` service there. The compose service
 block, the database and the GitHub environment/secrets (`SSH_*`, `TELEGRAM_BOT_TOKEN`,
-`TELEGRAM_CHAT_ID`) are set up once by a human - they aren't in this repo.
+`TELEGRAM_CHAT_ID`) are set up once by a human - they aren't in this repo. The app's own settings
+(`ConnectionStrings__Postgre`, `Identity__GrpcUrl`, `Telegram__Token`, `Telegram__ChatId`) go into
+that compose service's environment; the `TELEGRAM_*` GitHub secrets are only for CI's deploy
+notifications, not the app's bot.
 
 ## Testing
 

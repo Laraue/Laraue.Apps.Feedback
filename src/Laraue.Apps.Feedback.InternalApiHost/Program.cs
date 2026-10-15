@@ -34,7 +34,7 @@ public sealed class Program
             .UseNpgsql(connection, npgsql => npgsql.ConfigureDataSource(x => x.EnableDynamicJson()))
             .UseSnakeCaseNamingConvention());
 
-        builder.Services.AddInternalApiServices();
+        builder.AddInternalApiServices();
 
         builder.Services
             .AddGrpc()

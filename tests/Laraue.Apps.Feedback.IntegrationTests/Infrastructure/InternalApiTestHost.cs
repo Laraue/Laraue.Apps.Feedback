@@ -8,12 +8,37 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Moq;
 using OpenTelemetry.Exporter;
+using Telegram.Bot;
+using Telegram.Bot.Requests;
+using Telegram.Bot.Types;
+using UserIdentityService = Laraue.Apps.Identity.Internal.Contracts.UserIdentityService;
+using GetUserProfileRequest = Laraue.Apps.Identity.Internal.Contracts.GetUserProfileRequest;
+using GetUserProfileResponse = Laraue.Apps.Identity.Internal.Contracts.GetUserProfileResponse;
 
 namespace Laraue.Apps.Feedback.IntegrationTests.Infrastructure;
 
 public class InternalApiTestHost : WebApplicationFactory<Program>
 {
+    /// <summary>
+    /// Stands in for the real bot, so no test reaches Telegram. Reset by <see cref="CreateTestScope"/> to
+    /// accept every message; tests verify what was sent through it.
+    /// </summary>
+    public Mock<ITelegramBotClient> BotClientMock { get; } = new();
+
+    /// <summary>
+    /// Stands in for Laraue.Apps.Identity. Reset by <see cref="CreateTestScope"/> to return
+    /// <see cref="DefaultProfile"/> for any user.
+    /// </summary>
+    public Mock<UserIdentityService.UserIdentityServiceClient> IdentityClientMock { get; } = new();
+
+    public static GetUserProfileResponse DefaultProfile => new()
+    {
+        DisplayName = "Test User",
+        Initials = "TU",
+    };
+
     protected override IHost CreateHost(IHostBuilder builder)
     {
         builder.ConfigureHostConfiguration(config =>
@@ -25,6 +50,11 @@ public class InternalApiTestHost : WebApplicationFactory<Program>
         // would read stale numbers.
         builder.ConfigureServices(services => services.Configure<PrometheusAspNetCoreOptions>(
             options => options.ScrapeResponseCacheDurationMilliseconds = 0));
+
+        // Registered after the host's own, so these win.
+        builder.ConfigureServices(services => services
+            .AddSingleton(BotClientMock.Object)
+            .AddSingleton(IdentityClientMock.Object));
 
         return base.CreateHost(builder);
     }
@@ -61,9 +91,36 @@ public class InternalApiTestHost : WebApplicationFactory<Program>
 
     public InternalApiTestHostScope CreateTestScope()
     {
+        ResetMocks();
+
         var scope = Services.CreateScope();
 
         return new InternalApiTestHostScope(scope);
+    }
+
+    private void ResetMocks()
+    {
+        BotClientMock.Reset();
+        BotClientMock
+            .Setup(x => x.SendRequest(It.IsAny<SendMessageRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Message());
+
+        IdentityClientMock.Reset();
+        SetupProfile(DefaultProfile);
+    }
+
+    /// <summary>
+    /// Makes Identity return <paramref name="profile"/> for any user.
+    /// </summary>
+    public void SetupProfile(GetUserProfileResponse profile)
+    {
+        IdentityClientMock
+            .Setup(x => x.GetUserProfileAsync(
+                It.IsAny<GetUserProfileRequest>(),
+                It.IsAny<global::Grpc.Core.Metadata>(),
+                It.IsAny<DateTime?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(() => GrpcTestHelpers.AsyncUnaryCallOf(profile));
     }
 }
 

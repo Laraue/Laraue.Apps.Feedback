@@ -11,4 +11,8 @@
       <ProjectReference Include="..\Laraue.Apps.Feedback.Internal.Contracts\Laraue.Apps.Feedback.Internal.Contracts.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+      <PackageReference Include="Laraue.Grpc.Client" Version="$(LaraueGrpcVersion)" />
+    </ItemGroup>
+
 </Project>

@@ -8,6 +8,8 @@
 
     <ItemGroup>
       <PackageReference Include="Laraue.Core.DateTime" Version="$(LaraueCoreDateTimeVersion)" />
+      <PackageReference Include="Laraue.Apps.Identity.Internal.Contracts" Version="$(LaraueIdentityInternalContractsVersion)" />
+      <PackageReference Include="Telegram.Bot" Version="$(TelegramBotVersion)" />
     </ItemGroup>
 
     <ItemGroup>
