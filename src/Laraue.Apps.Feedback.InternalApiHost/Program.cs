@@ -56,6 +56,7 @@ public sealed class Program
             await db.Database.MigrateAsync();
         }
 
+        app.MapGrpcService<FeedbackGrpcService>();
         app.MapHealthChecks("/_health");
         app.MapPrometheusScrapingEndpoint("/_metrics");
 

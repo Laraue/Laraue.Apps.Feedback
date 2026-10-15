@@ -13,6 +13,18 @@ public class FeedbackItem
     /// </summary>
     public const int MessageMaxLength = 3000;
 
+    /// <summary>
+    /// Limits of <see cref="Context"/>: enough for a page URL and a handful of details, while keeping a
+    /// caller from storing arbitrary amounts of data in it.
+    /// </summary>
+    public const int ContextMaxEntries = 20;
+
+    /// <inheritdoc cref="ContextMaxEntries"/>
+    public const int ContextKeyMaxLength = 64;
+
+    /// <inheritdoc cref="ContextMaxEntries"/>
+    public const int ContextValueMaxLength = 2048;
+
     public long Id { get; set; }
 
     /// <summary>

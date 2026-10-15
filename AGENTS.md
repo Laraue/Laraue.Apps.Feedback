@@ -10,11 +10,18 @@ sends the feedback its users leave - a bug report, an idea, a question - here, a
 stores it and notifies the team in a Telegram chat. It is internal on purpose: users never call it
 directly, the app they're in does, over gRPC.
 
-**Stage 1 (BRD-224, in progress)**: internal gRPC only.
-- `SubmitFeedback(user_id, type, message, context)` -> feedback id. Validates the message length and
-  the type.
-- `ListFeedback(filter: service?, status?, pagination)` -> a paginated list, newest first.
-- A Telegram notification to the team chat on every submitted feedback: type, sender, service,
+**Stage 1 (BRD-224, in progress)**: internal gRPC only (`Protos/feedback.proto`, `FeedbackService`).
+- `SubmitFeedback(user_id, type, message, context)` -> feedback id, stored as `New`. Requires the
+  `x-laraue-service-id` header, a non-empty user id, a set type, a message that isn't blank after
+  trimming and fits `FeedbackItem.MessageMaxLength`, and a context within `FeedbackItem.Context*`
+  limits (entries, key and value length) - otherwise `INVALID_ARGUMENT`. The message is stored
+  trimmed.
+- `ListFeedback(service?, status?, page, per_page)` -> a page, newest first, with `has_next_page`
+  (`ShortPaginateEFAsync`). `page` is 0-based, `per_page` 1-`FeedbackService.PerPageMax` (100);
+  the core service checks this itself, since `Laraue.Core`'s pagination throws a plain
+  `ArgumentException` (a gRPC `INTERNAL`) for a bad page. It doesn't read the service header: listing
+  is for reading everyone's feedback, not tied to the caller.
+- A Telegram notification (**not built yet**, next step) to the team chat on every submitted feedback: type, sender, service,
   page, message. The sender is resolved through `Laraue.Apps.Identity`'s `GetUserProfile` (display
   name, `@username` or the Google email - BRD-223). If Identity is unavailable, the notification
   still goes out, with the global user id instead of a name - a failed lookup never loses feedback.
@@ -61,11 +68,16 @@ referencing `Services` directly, only through its own `Host{Services}` project.
   NuGet.org as `Laraue.Apps.Feedback.Internal.Contracts` via `.github/workflows/nuget-publish.yml`
   (manual trigger; `main` publishes the base `<Version>` from `Directory.Build.props`, any other
   branch appends `-alpha.<run number>`). No DB/ASP.NET dependencies.
-- `src/Laraue.Apps.Feedback.Services` - core business logic (submit, validation, listing, the
-  Telegram notification), not tied to gRPC.
-- `src/Laraue.Apps.Feedback.InternalApiServices` - the gRPC-facing implementation of
-  `Internal.Contracts`, mapping wire types <-> `Services` types, plus its own DI composition
-  (`AddInternalApiServices()`).
+- `src/Laraue.Apps.Feedback.Services` - core business logic, not tied to gRPC: `FeedbackService`
+  (submit with validation, listing). Invalid input is a `BadRequestException` with an
+  `Errors.resx` message.
+- `src/Laraue.Apps.Feedback.InternalApiServices` - `FeedbackGrpcService`, the gRPC-facing
+  implementation of `Internal.Contracts`, mapping wire types <-> domain types and
+  `BadRequestException` -> `INVALID_ARGUMENT` (with the field errors as the status detail -
+  the exception's own `Message` is just "Bad request"), plus its own DI composition
+  (`AddInternalApiServices()`). The generated proto types share names with the domain ones
+  (`FeedbackService`, `ServiceId`, `FeedbackType`, ...), so the file aliases them as
+  `Contracts.`/`Domain.`.
 - `src/Laraue.Apps.Feedback.InternalApiHost` - the gRPC host: `Program.cs` only (Kestrel h2c, DI,
   OpenTelemetry, migrations on startup). Listens on **two separate ports** (`Kestrel:GrpcPort`/
   `:HealthPort`, 5463/5464 by default - Identity uses 5363/5364, Billing 5263/5264): one
