@@ -30,7 +30,8 @@ public sealed class Program
 
         var connection = builder.Configuration.GetConnectionString(dbConnectionStringName);
         builder.Services.AddDbContext<DatabaseContext>(opt => opt
-            .UseNpgsql(connection)
+            // Dynamic JSON: FeedbackItem.Context, a Dictionary stored as jsonb.
+            .UseNpgsql(connection, npgsql => npgsql.ConfigureDataSource(x => x.EnableDynamicJson()))
             .UseSnakeCaseNamingConvention());
 
         builder.Services.AddInternalApiServices();

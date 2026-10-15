@@ -32,12 +32,14 @@ directly, the app they're in does, over gRPC.
   called `Feedback` is shadowed by the `Laraue.Apps.Feedback` namespace in every project here, so
   each use would need qualifying. The message is at most `FeedbackItem.MessageMaxLength` (3000): the
   notification carries the whole message plus a few header lines, and a Telegram message is at most
-  4096 characters. Indexed for `ListFeedback` (newest first, optionally by service and status).
+  4096 characters. "Newest first" is `ORDER BY id DESC` (an identity column), served by the primary key -
+  no `created_at` index.
 - `FeedbackItem.Context` - free-form key/value pairs the calling app attaches (page URL,
   organization, app version, locale, browser), a `Dictionary<string, string>` stored as `jsonb`.
-  This service doesn't interpret them, except that the notification shows the page. The JSON
-  conversion is a value converter in `DatabaseContext`, not Npgsql's dynamic JSON - that needs an
-  `EnableDynamicJson()` opt-in on every host's data source and fails at the first insert without it.
+  This service doesn't interpret them, except that the notification shows the page. Serialized by
+  Npgsql's dynamic JSON, which needs `ConfigureDataSource(x => x.EnableDynamicJson())` in the host's
+  `UseNpgsql` (see `InternalApiHost/Program.cs`) - a new host without it fails at the first insert
+  with "requires dynamic JSON serialization".
 - `Service` - a consuming app (`LaraueBoards`), seeded via `HasData` from `Data/ServicesData.cs`,
   same as Identity. An independent registry from Identity's/Billing's own `ServiceId` enums - adding
   a caller means a new enum value, a `ServicesData` entry, a migration and a matching value in the

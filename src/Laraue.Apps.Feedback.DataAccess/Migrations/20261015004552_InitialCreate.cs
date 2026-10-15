@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -35,7 +36,7 @@ namespace Laraue.Apps.Feedback.DataAccess.Migrations
                     service_id = table.Column<int>(type: "integer", nullable: false),
                     type = table.Column<int>(type: "integer", nullable: false),
                     message = table.Column<string>(type: "character varying(3000)", maxLength: 3000, nullable: false),
-                    context = table.Column<string>(type: "jsonb", nullable: false),
+                    context = table.Column<Dictionary<string, string>>(type: "jsonb", nullable: false),
                     status = table.Column<int>(type: "integer", nullable: false),
                     created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
@@ -56,14 +57,9 @@ namespace Laraue.Apps.Feedback.DataAccess.Migrations
                 values: new object[] { 1, "laraue_boards", "Laraue Boards" });
 
             migrationBuilder.CreateIndex(
-                name: "ix_feedback_items_created_at",
+                name: "ix_feedback_items_service_id",
                 table: "feedback_items",
-                column: "created_at");
-
-            migrationBuilder.CreateIndex(
-                name: "ix_feedback_items_service_id_status_created_at",
-                table: "feedback_items",
-                columns: new[] { "service_id", "status", "created_at" });
+                column: "service_id");
         }
 
         /// <inheritdoc />
