@@ -46,7 +46,7 @@ public class FeedbackNotificationTests(InternalApiTestHost host) : IClassFixture
             $"""
             🐞 Bug #{response.FeedbackId} · Laraue Boards
             From: Ilya Belyansky · @ilya · ilya@example.com ({userId})
-            page: https://boards.laraue.com/organizations/test/issues
+            Page: https://boards.laraue.com/organizations/test/issues
 
             The board doesn't load
             """,
@@ -68,7 +68,7 @@ public class FeedbackNotificationTests(InternalApiTestHost host) : IClassFixture
             $"""
             ({userId})
             Contact: @ilya_tg
-            page: https://boards.laraue.com/organizations/test/issues
+            Page: https://boards.laraue.com/organizations/test/issues
 
             Add dark mode
             """,
@@ -96,8 +96,8 @@ public class FeedbackNotificationTests(InternalApiTestHost host) : IClassFixture
         await host.CreateFeedbackClient(ServiceId.LaraueBoards).SubmitFeedbackAsync(request);
 
         var text = Assert.Single(SentMessages()).Text;
-        Assert.Contains("\nlocale: en\n", text);
-        Assert.Contains("\nbrowser: Firefox 140\n", text);
+        Assert.Contains("\nLocale: en\n", text);
+        Assert.Contains("\nBrowser: Firefox 140\n", text);
     }
 
     [Fact]
@@ -186,7 +186,7 @@ public class FeedbackNotificationTests(InternalApiTestHost host) : IClassFixture
 
         var text = FeedbackNotifier.BuildText(item, sender: null);
 
-        Assert.Contains($"\npage: {new string('p', FeedbackNotifier.ContextValueShownMaxLength - 1)}…\n", text);
+        Assert.Contains($"\nPage: {new string('p', FeedbackNotifier.ContextValueShownMaxLength - 1)}…\n", text);
     }
 
     [Fact]
@@ -203,8 +203,8 @@ public class FeedbackNotificationTests(InternalApiTestHost host) : IClassFixture
         var text = FeedbackNotifier.BuildText(item, sender: null);
 
         Assert.True(text.Length <= 4096);
-        Assert.Contains("\nkey0: ", text);
-        Assert.DoesNotContain($"\nkey{Domain.FeedbackItem.ContextMaxEntries - 1}: ", text);
+        Assert.Contains("\nKey0: ", text);
+        Assert.DoesNotContain($"\nKey{Domain.FeedbackItem.ContextMaxEntries - 1}: ", text);
         Assert.EndsWith($"\n…\n\n{message}", text);
     }
 

@@ -118,7 +118,7 @@ public sealed class FeedbackNotifier(
 
         var droppedLine = $"…{Environment.NewLine}";
         var lines = item.Context
-            .Select(x => $"{x.Key}: {Cut(x.Value, ContextValueShownMaxLength)}{Environment.NewLine}")
+            .Select(x => $"{Capitalize(x.Key)}: {Cut(x.Value, ContextValueShownMaxLength)}{Environment.NewLine}")
             .ToList();
 
         for (var i = 0; i < lines.Count; i++)
@@ -141,6 +141,9 @@ public sealed class FeedbackNotifier(
 
         return header.AppendLine().Append(message).ToString();
     }
+
+    // Keys are never empty - the submit validation rejects that.
+    private static string Capitalize(string key) => char.ToUpperInvariant(key[0]) + key[1..];
 
     private static string Cut(string text, int maxLength) => text.Length <= maxLength
         ? text

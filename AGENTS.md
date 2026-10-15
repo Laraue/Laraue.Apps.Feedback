@@ -24,9 +24,9 @@ directly, the app they're in does, over gRPC.
   is for reading everyone's feedback, not tied to the caller.
 - A Telegram notification to the team chat (`Telegram:ChatId`) on every submitted feedback
   (`FeedbackNotifier`): type, feedback id, service, sender, contact (when set), every context entry
-  as `key: value`, message. The notifier doesn't look for particular context keys - anything a
-  caller needs this service to understand is a typed request field (like `contact`), not a context
-  entry. The sender is resolved through `Laraue.Apps.Identity`'s `GetUserProfile` - display
+  as `Key: value` (the key's first letter upper-cased), message. The notifier doesn't look for
+  particular context keys - anything a caller needs this service to understand is a typed request
+  field (like `contact`), not a context entry. The sender is resolved through `Laraue.Apps.Identity`'s `GetUserProfile` - display
   name, `@username` (when it isn't the display name already) and the Google email (BRD-223), always
   followed by the global user id. If Identity fails or takes longer than
   `FeedbackNotifier.IdentityTimeout` (3 s), the notification goes out with the user id only.
